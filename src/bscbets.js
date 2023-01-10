@@ -36,7 +36,4 @@ class BscBets {
         await tx.wait();
         return txHash;
     }
-
-    
-
 }
