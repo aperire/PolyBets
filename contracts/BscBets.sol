@@ -16,7 +16,7 @@ contract BscBets {
     uint public rewardPoolBalance;
     
     // BET Token Address
-    address BET = 0x7a7813265032cC4b08332CF531Fc377134e91ac8;
+    address BET = 0x47DbA3639dda3b927EA20F754fAb0973dC26cC65;
 
     // Probability distribution array (100~10000)
     uint [] probabilityArray;
@@ -28,12 +28,12 @@ contract BscBets {
     uint vipThreshold = 10000;
 
     // Onlyowner
-    function updateProbabilityArray(uint[] memory _probabilityArray) private {
+    function updateProbabilityArray(uint[] memory _probabilityArray) public {
         require(msg.sender==admin, "Only admin can access");
         probabilityArray = _probabilityArray;
     }
 
-    function updateVipProbabilityArray(uint[] memory _vipProbabilityArray) private {
+    function updateVipProbabilityArray(uint[] memory _vipProbabilityArray) public {
         require(msg.sender==admin, "Only admin can access");
         vipProbabilityArray = _vipProbabilityArray;
     }
@@ -41,6 +41,10 @@ contract BscBets {
     function updateGlobalSeed(string memory _seed) public {
         require(msg.sender==admin, "Only admin can access");
         globalSeed = _seed;
+    }
+
+    function getGlobalSeed() public view returns (string memory currentSeed) {
+        return globalSeed;
     }
 
     function decimalWrapper(uint _number) public pure returns (uint number){
@@ -108,7 +112,6 @@ contract BscBets {
 
     function adminDepositRewardPool(uint _amount) public {
         require(msg.sender==admin, "Only admin can access");
-        require(ERC20(BET).approve(msg.sender, _amount), "Not Approved");
         require(ERC20(BET).transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         rewardPoolBalance += _amount;
     }

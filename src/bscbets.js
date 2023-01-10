@@ -1,5 +1,5 @@
 const { ethers } = require("ethers");
-const contractData = require("./contract.js");
+const { contractData } = require("./contract.js");
 
 const getSigner = (PRIVATE_KEY, BSC_PROVIDER) => {
     const provider = ethers.getDefaultProvider(BSC_PROVIDER);

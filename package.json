@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/aperire/bscbets#readme",
   "dependencies": {
+    "ethers": "^5.7.2",
     "web3": "^1.8.1"
   }
 }
