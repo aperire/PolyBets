@@ -2,54 +2,188 @@
 pragma solidity ^0.8.15;
 import "./IERC20.sol";
 import "./SafeMath.sol";
-
+import "./Ownable.sol";
 
 contract BscBets {
     // Global Random Seed
     string globalSeed = "genesis";
+
+    // Admin Address
+    address admin = 0xA57d9222Fbd1BDbfc03e6CEfb36365E148c93F62;
+
+    // User Balance Map
+    mapping(address => uint) public userBalanceMap;
     
     // Reward Pool Balance
     uint public rewardPoolBalance;
     
-    // BscBets Revenue Balance
-    uint public revenueBalance;
-
     // BET Token Address
     IERC20 BET = IERC20(0x44FF97802090808199840E868F280aeB54FBbDf0);
 
+    // Probability distribution array (100~10000)
+    uint [] probabilityArray;
+
+    // Probability distribution array (VIP) (100~10000)
+    uint [] vipProbabilityArray;
+
+    // Min LP Token for VIP
+    uint vipThreshold = 10000;
+
+    // Onlyowner
+    function updateProbabilityArray(uint[] memory _probabilityArray) private {
+        require(msg.sender==admin, "Only admin can access");
+        probabilityArray = _probabilityArray;
+    }
+
+    function updateVipProbabilityArray(uint[] memory _vipProbabilityArray) private {
+        require(msg.sender==admin, "Only admin can access");
+        vipProbabilityArray = _vipProbabilityArray;
+    }
+
     function updateGlobalSeed(string memory _seed) public {
+        require(msg.sender==admin, "Only admin can access");
         globalSeed = _seed;
     }
 
-    function decimalWrapper(uint _number) public pure returns (uint multiplier){
+    function decimalWrapper(uint _number) public pure returns (uint number){
         return _number * 10**14;
     }
 
-    function multiplierProbabilityLogic(uint _multiplier) public pure returns (uint probability){
-        uint multiplier = _multiplier;
-        /*
-        Max decimal for multiplier is 14
-        */
-        require(1<=multiplier, "Invalid multiplier. Should be equal or bigger than 100");
-        require(multiplier<=100, "Invalid multiplier. Should be equal or smaller than 100");
-        /*
-        Multiplier is from 1x to 100x. The probability for multiplier is as follows.
-
-        probability = 70/multiplier
-        */
-        probability = decimalWrapper(70) / multiplier;
-        return probability;
+    function getRandomInt() public view returns (uint randomInt) {
+        randomInt = uint(
+            keccak256(
+                abi.encodePacked(
+                    block.coinbase,
+                    block.difficulty,
+                    block.timestamp,
+                    globalSeed
+                )
+            )
+        );
+        return randomInt;
     }
 
-    function getWinMultiplier() {
-
+    function getWinMultiplier(bool _isVip) public view returns (uint winMultiplier){
+        uint randomInt = getRandomInt();
+        if (_isVip) {
+            winMultiplier = vipProbabilityArray[randomInt%probabilityArray.length];
+        } else {
+            winMultiplier = probabilityArray[randomInt%probabilityArray.length];
+        }
+        return winMultiplier;
     }
 
 
-    // function createBet(uint _betAmount, uint _multiplierLimit) public {
+    function createBet(uint _betAmount, uint _multiplierLimit) public returns (bool win) {
+        require(_multiplierLimit<=10000, "invalid multiplierLimit");
+        require(_multiplierLimit>=100, "invalid multiplierLimit");
+
+        require(BET.allowance(msg.sender, address(this))==_betAmount, "Insufficient Allowance");
+        require(BET.transferFrom(msg.sender, address(this), _betAmount), "Transfer Unsuccesful");
+        userBalanceMap[msg.sender] += _betAmount;
+
+        bool isVip;
+        if(userLpBalanceMap[msg.sender] >= vipThreshold) {
+            isVip = true;
+        } else{
+            isVip = false;
+        }
+
+        uint winMultiplier = getWinMultiplier(isVip);
         
-    // }
+        if (_multiplierLimit <= winMultiplier) {
+            userBalanceMap[msg.sender] = _betAmount*_multiplierLimit/100;
+            rewardPoolBalance -= _betAmount*(_multiplierLimit-100)/100;
+            win = true;
+        } else {
+            userBalanceMap[msg.sender] = 0;
+            rewardPoolBalance += _betAmount/100;
+            win = false;
+        }
+        return win;
+    }
 
-    // function withdrawReward
+    function withdrawReward() public payable {
+        uint currentBalance = userBalanceMap[msg.sender];
+        require(BET.transferFrom(address(this), msg.sender, currentBalance), "Transfer Unsuccesful");
+        userBalanceMap[msg.sender] = 0; 
+    }
 
+    function adminDepositRewardPool(uint _amount) public {
+        require(msg.sender==admin, "Only admin can access");
+        require(BET.allowance(msg.sender, address(this))==_amount, "Insufficient Allowance");
+        require(BET.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
+        rewardPoolBalance += _amount;
+    }
+
+    function adminWithdrawRewardPool(uint _amount) public payable{
+        require(msg.sender==admin, "Only admin can access");
+        require(_amount<=rewardPoolBalance, "insufficient fee");
+        require(BET.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
+        rewardPoolBalance -= _amount;
+    }
+
+    /*
+    BET-USDC LP Token
+    */
+    IERC20 BET_USDC = IERC20(0x974b6a2AaBB0B0dd5223C341DD3f2F1210F4a3bF);
+    mapping(address => uint) public userLpBalanceMap;
+    mapping(address => uint) public userFarmingRewardMap;
+    address[] public userAddressArray;
+    uint rewardEmissionPerDay;
+    uint netLpTokenBalance;
+
+    uint rewardReserveBalance;
+    uint lastUpdateTs;
+    uint tsEpochLength = 60 * 60 * 24;
+
+    function updateRewards() public {
+        require(block.timestamp-lastUpdateTs >= tsEpochLength, "Cannot be updated now");
+        require(rewardReserveBalance >= rewardEmissionPerDay, "Insufficient reserve");
+        uint rewardPerLpToken = rewardEmissionPerDay/netLpTokenBalance;
+        for (uint i=0; i<userAddressArray.length; i++) {
+            address userAddress = userAddressArray[i];
+            uint userLpBalance = userLpBalanceMap[userAddress];
+            uint rewardAmount = rewardPerLpToken * userLpBalance;
+            userFarmingRewardMap[userAddress] += rewardAmount;
+        }
+        rewardReserveBalance -= rewardEmissionPerDay;
+        lastUpdateTs += tsEpochLength;
+    }
+
+    function setRewardEmissionPerDay(uint _amount) public {
+        require(msg.sender==admin, "Only admin");
+        require(rewardReserveBalance >= _amount, "Insufficient Balance");
+        rewardEmissionPerDay = _amount;
+    }
+
+    function depositRewards(uint _amount) public {
+        require(BET.allowance(msg.sender, address(this))==_amount, "Insufficient Allowance");
+        require(BET.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
+        rewardReserveBalance += _amount;
+    }
+
+    function withdrawRewards(uint _amount) public payable{
+        require(rewardReserveBalance>=_amount, "Insufficient Allowance");
+        require(BET.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
+        rewardReserveBalance -= _amount;
+    }
+
+    function depositLpToken(uint _amount) public {
+        require(BET_USDC.allowance(msg.sender, address(this))==_amount, "Insufficient Allowance");
+        require(BET_USDC.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
+        userLpBalanceMap[msg.sender] += _amount;
+    }
+
+    function withdrawLpToken(uint _amount) public payable{
+        require(userLpBalanceMap[msg.sender]<=_amount, "Insufficient Allowance");
+        require(BET_USDC.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
+        userLpBalanceMap[msg.sender] -= _amount;
+    }
+
+    function withdrawReward(uint _amount) public {
+        require(userFarmingRewardMap[msg.sender]>=_amount, "Insufficient Allowance");
+        require(BET.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
+        userFarmingRewardMap[msg.sender] -= _amount;
+    }
 }
