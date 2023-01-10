@@ -1,0 +1,22 @@
+{
+  "name": "bscbets",
+  "version": "1.0.0",
+  "description": "Rocket Multiplier Betting Platform on Binance Smart Chain",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aperire/bscbets.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/aperire/bscbets/issues"
+  },
+  "homepage": "https://github.com/aperire/bscbets#readme",
+  "dependencies": {
+    "web3": "^1.8.1"
+  }
+}
