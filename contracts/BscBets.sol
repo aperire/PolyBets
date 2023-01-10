@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
-import "./IERC20.sol";
-import "./SafeMath.sol";
-import "./Ownable.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 
 contract BscBets {
     // Global Random Seed
@@ -18,7 +16,7 @@ contract BscBets {
     uint public rewardPoolBalance;
     
     // BET Token Address
-    IERC20 BET = IERC20(0x44FF97802090808199840E868F280aeB54FBbDf0);
+    address BET = 0x7a7813265032cC4b08332CF531Fc377134e91ac8;
 
     // Probability distribution array (100~10000)
     uint [] probabilityArray;
@@ -78,8 +76,7 @@ contract BscBets {
         require(_multiplierLimit<=10000, "invalid multiplierLimit");
         require(_multiplierLimit>=100, "invalid multiplierLimit");
 
-        require(BET.allowance(msg.sender, address(this))==_betAmount, "Insufficient Allowance");
-        require(BET.transferFrom(msg.sender, address(this), _betAmount), "Transfer Unsuccesful");
+        require(ERC20(BET).transferFrom(msg.sender, address(this), _betAmount), "Transfer Unsuccesful");
         userBalanceMap[msg.sender] += _betAmount;
 
         bool isVip;
@@ -105,28 +102,28 @@ contract BscBets {
 
     function withdrawReward() public payable {
         uint currentBalance = userBalanceMap[msg.sender];
-        require(BET.transferFrom(address(this), msg.sender, currentBalance), "Transfer Unsuccesful");
+        require(ERC20(BET).transferFrom(address(this), msg.sender, currentBalance), "Transfer Unsuccesful");
         userBalanceMap[msg.sender] = 0; 
     }
 
     function adminDepositRewardPool(uint _amount) public {
         require(msg.sender==admin, "Only admin can access");
-        require(BET.allowance(msg.sender, address(this))==_amount, "Insufficient Allowance");
-        require(BET.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
+        require(ERC20(BET).approve(msg.sender, _amount), "Not Approved");
+        require(ERC20(BET).transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         rewardPoolBalance += _amount;
     }
 
     function adminWithdrawRewardPool(uint _amount) public payable{
         require(msg.sender==admin, "Only admin can access");
         require(_amount<=rewardPoolBalance, "insufficient fee");
-        require(BET.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
+        require(ERC20(BET).transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         rewardPoolBalance -= _amount;
     }
 
     /*
     BET-USDC LP Token
     */
-    IERC20 BET_USDC = IERC20(0x974b6a2AaBB0B0dd5223C341DD3f2F1210F4a3bF);
+    ERC20 BET_USDC = ERC20(0x974b6a2AaBB0B0dd5223C341DD3f2F1210F4a3bF);
     mapping(address => uint) public userLpBalanceMap;
     mapping(address => uint) public userFarmingRewardMap;
     address[] public userAddressArray;
@@ -157,33 +154,28 @@ contract BscBets {
         rewardEmissionPerDay = _amount;
     }
 
-    function depositRewards(uint _amount) public {
-        require(BET.allowance(msg.sender, address(this))==_amount, "Insufficient Allowance");
-        require(BET.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
+    function adminDepositRewards(uint _amount) public {
+        require(ERC20(BET).transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         rewardReserveBalance += _amount;
     }
 
-    function withdrawRewards(uint _amount) public payable{
-        require(rewardReserveBalance>=_amount, "Insufficient Allowance");
-        require(BET.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
+    function adminWithdrawRewards(uint _amount) public payable{
+        require(ERC20(BET).transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         rewardReserveBalance -= _amount;
     }
 
     function depositLpToken(uint _amount) public {
-        require(BET_USDC.allowance(msg.sender, address(this))==_amount, "Insufficient Allowance");
         require(BET_USDC.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] += _amount;
     }
 
     function withdrawLpToken(uint _amount) public payable{
-        require(userLpBalanceMap[msg.sender]<=_amount, "Insufficient Allowance");
         require(BET_USDC.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] -= _amount;
     }
 
     function withdrawReward(uint _amount) public {
-        require(userFarmingRewardMap[msg.sender]>=_amount, "Insufficient Allowance");
-        require(BET.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
+        require(ERC20(BET).transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         userFarmingRewardMap[msg.sender] -= _amount;
     }
 }
