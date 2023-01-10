@@ -20,7 +20,33 @@ const contractData = [
 				"type": "uint256"
 			}
 		],
+		"name": "adminDepositRewards",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_amount",
+				"type": "uint256"
+			}
+		],
 		"name": "adminWithdrawRewardPool",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_amount",
+				"type": "uint256"
+			}
+		],
+		"name": "adminWithdrawRewards",
 		"outputs": [],
 		"stateMutability": "payable",
 		"type": "function"
@@ -58,19 +84,6 @@ const contractData = [
 			}
 		],
 		"name": "depositLpToken",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_amount",
-				"type": "uint256"
-			}
-		],
-		"name": "depositRewards",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -137,19 +150,6 @@ const contractData = [
 	{
 		"inputs": [],
 		"name": "withdrawReward",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_amount",
-				"type": "uint256"
-			}
-		],
-		"name": "withdrawRewards",
 		"outputs": [],
 		"stateMutability": "payable",
 		"type": "function"

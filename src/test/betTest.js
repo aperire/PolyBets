@@ -1,0 +1,1 @@
+const { getSigner, BscBets } = require("../bscbets");
