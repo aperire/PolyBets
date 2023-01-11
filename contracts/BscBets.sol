@@ -176,11 +176,13 @@ contract BscBets {
 
     function depositLpToken(uint _amount) public {
         require(BET_USDC.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
+        netLpTokenBalance += _amount;
         userLpBalanceMap[msg.sender] += _amount;
     }
 
     function withdrawLpToken(uint _amount) public payable{
         require(BET_USDC.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
+        netLpTokenBalance -= _amount;
         userLpBalanceMap[msg.sender] -= _amount;
     }
 
