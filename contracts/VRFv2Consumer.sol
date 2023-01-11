@@ -71,7 +71,7 @@ contract VRFv2Consumer is VRFConsumerBaseV2, ConfirmedOwner {
         COORDINATOR = VRFCoordinatorV2Interface(
             0x6A2AAd07396B36Fe02a22b33cf443582f682c82f
         );
-        s_subscriptionId = subscriptionId;
+        s_subscriptionId = 2427;
     }
 
     // Assumes the subscription is funded sufficiently.

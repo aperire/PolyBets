@@ -4,9 +4,9 @@ import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import "./VRFv2Consumer.sol";
 
 interface ChainlinkVRF {
-    function requestRandomWords() public;
-    function getRequestStatus(uint256) public;
-    function lastRequestId() public view returns (uint256);
+    function requestRandomWords() external returns (uint256);
+    function getRequestStatus(uint256) external returns (bool, uint256[] memory);
+    function lastRequestId() external view returns (uint256);
 }
 
 contract BscBets {
@@ -35,7 +35,7 @@ contract BscBets {
     uint vipThreshold = 10000;
 
     // VRF Functions
-    function getRandomInt() public {
+    function getRandomInt() public returns(uint256){
         uint256 requestId = chainlinkVRF.requestRandomWords();
         bool fulfilled;
         uint256[] memory randomWords;
@@ -63,7 +63,7 @@ contract BscBets {
         return _number / 10**14;
     }
 
-    function getWinMultiplier(bool _isVip) public view returns (uint winMultiplier){
+    function getWinMultiplier(bool _isVip) public returns (uint winMultiplier){
         uint randomInt = getRandomInt();
         if (_isVip) {
             winMultiplier = vipProbabilityArray[randomInt%probabilityArray.length];
@@ -82,7 +82,7 @@ contract BscBets {
         userBalanceMapWei[msg.sender] += _betAmountWei;
 
         bool isVip;
-        if(userLpBalanceMapWei[msg.sender] >= vipThreshold) {
+        if(userLpBalanceMap[msg.sender] >= vipThreshold) {
             isVip = true;
         } else{
             isVip = false;
@@ -97,7 +97,7 @@ contract BscBets {
             win = true;
         } else {
             userBalanceMapWei[msg.sender] = 0;
-            rewardPoolBalanceWei += _betAmount;
+            rewardPoolBalanceWei += _betAmountWei;
             win = false;
         }
         
@@ -106,7 +106,7 @@ contract BscBets {
 
     function withdrawReward() public payable {
         uint currentBalance = userBalanceMapWei[msg.sender];
-        require(ERC20(BET).approve(msg.sender, _amount));
+        require(ERC20(BET).approve(msg.sender, currentBalance));
         require(ERC20(BET).transferFrom(address(this), msg.sender, currentBalance), "Transfer Unsuccesful");
         userBalanceMapWei[msg.sender] = 0; 
     }
