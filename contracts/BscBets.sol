@@ -4,7 +4,7 @@ import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import "./VRFv2Consumer.sol";
 
 interface ChainlinkVRF {
-    function requestRandomWords() external returns (uint256);
+    function requestRandomWords() external;
     function getRequestStatus(uint256) external returns (bool, uint256[] memory);
     function lastRequestId() external view returns (uint256);
 }
@@ -18,6 +18,12 @@ contract BscBets {
 
     // User Balance Map(Wei)
     mapping(address => uint) public userBalanceMapWei;
+
+    // User Multiplier Map
+    mapping(address => uint) public userMultiplierMap;
+
+    // User VRF Map
+    mapping(address => uint256) public userVrfMap;
     
     // Reward Pool Balance
     uint public rewardPoolBalanceWei;
@@ -33,16 +39,6 @@ contract BscBets {
 
     // Min LP Token for VIP
     uint vipThreshold = 10000;
-
-    // VRF Functions
-    function getRandomInt() public returns(uint256){
-        uint256 requestId = chainlinkVRF.requestRandomWords();
-        bool fulfilled;
-        uint256[] memory randomWords;
-        (fulfilled, randomWords) = chainlinkVRF.getRequestStatus(requestId);
-        require(fulfilled==true, "VRF not fulfilled");
-        return randomWords[0];
-    }
 
     // Onlyowner
     function updateProbabilityArray(uint[] memory _probabilityArray) public {
@@ -63,45 +59,59 @@ contract BscBets {
         return _number / 10**14;
     }
 
-    function getWinMultiplier(bool _isVip) public returns (uint winMultiplier){
-        uint randomInt = getRandomInt();
+    function getWinMultiplier(bool _isVip, uint256 _randInt) public returns (uint winMultiplier){
         if (_isVip) {
-            winMultiplier = vipProbabilityArray[randomInt%probabilityArray.length];
+            winMultiplier = vipProbabilityArray[_randInt%probabilityArray.length];
         } else {
-            winMultiplier = probabilityArray[randomInt%probabilityArray.length];
+            winMultiplier = probabilityArray[_randInt%probabilityArray.length];
         }
         return winMultiplier;
     }
 
-
-    function createBet(uint _betAmountWei, uint _multiplierLimit) public returns (bool win) {
+    function createBet(uint _betAmountWei, uint _multiplierLimit) public {
         require(_betAmountWei>=100, "betamount too small");
         require(_multiplierLimit<=10000, "invalid multiplierLimit");
         require(_multiplierLimit>=100, "invalid multiplierLimit");
         require(ERC20(BET).transferFrom(msg.sender, address(this), _betAmountWei), "Transfer Unsuccesful");
-        userBalanceMapWei[msg.sender] += _betAmountWei;
 
+        // VRF
+        chainlinkVRF.requestRandomWords();
+        uint256 requestId = chainlinkVRF.lastRequestId();
+
+        userBalanceMapWei[msg.sender] = _betAmountWei;
+        userMultiplierMap[msg.sender] = _multiplierLimit;
+        userVrfMap[msg.sender] = requestId;
+    }
+
+    function determineWin() public {
+        uint betAmountWei = userBalanceMapWei[msg.sender];
+        uint multiplierLimit = userMultiplierMap[msg.sender];
+        uint256 requestId = userVrfMap[msg.sender];
+
+        bool fulfilled;
+        uint256[] memory randomWords;
+        (fulfilled, randomWords) = chainlinkVRF.getRequestStatus(requestId);
+        require(fulfilled==true, "VRF Not Confirmed");
+        require(betAmountWei!=0, "No balance");
+        uint256 randInt = randomWords[0];
         bool isVip;
+
         if(userLpBalanceMap[msg.sender] >= vipThreshold) {
             isVip = true;
         } else{
             isVip = false;
         }
 
-        uint winMultiplier = getWinMultiplier(isVip);
+        uint winMultiplier = getWinMultiplier(isVip, randInt);
         
-        
-        if (_multiplierLimit <= winMultiplier) {
-            userBalanceMapWei[msg.sender] = _betAmountWei * _multiplierLimit / 100;
-            rewardPoolBalanceWei -= _betAmountWei * (_multiplierLimit-100) / 100;
-            win = true;
+        if (multiplierLimit <= winMultiplier) {
+            userBalanceMapWei[msg.sender] = betAmountWei * multiplierLimit / 100;
+            rewardPoolBalanceWei -= betAmountWei * (multiplierLimit-100) / 100;
         } else {
             userBalanceMapWei[msg.sender] = 0;
-            rewardPoolBalanceWei += _betAmountWei;
-            win = false;
+            rewardPoolBalanceWei += betAmountWei;
         }
         
-        return win;
     }
 
     function withdrawReward() public payable {
@@ -171,14 +181,12 @@ contract BscBets {
 
     function depositLpToken(uint _amount) public {
         require(BET_USDC.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
-        netLpTokenBalance += _amount;
         userLpBalanceMap[msg.sender] += _amount;
     }
 
     function withdrawLpToken(uint _amount) public payable{
         require(BET_USDC.approve(msg.sender, _amount));
         require(BET_USDC.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
-        netLpTokenBalance -= _amount;
         userLpBalanceMap[msg.sender] -= _amount;
     }
 
