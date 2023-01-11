@@ -1,19 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
+import "./VRFv2Consumer.sol";
+
+interface ChainlinkVRF {
+    function requestRandomWords() public;
+    function getRequestStatus(uint256) public;
+    function lastRequestId() public view returns (uint256);
+}
 
 contract BscBets {
-    // Global Random Seed
-    string globalSeed = "genesis";
+    // Set Chainlink interface
+    ChainlinkVRF public chainlinkVRF;
 
     // Admin Address
     address admin = 0xA57d9222Fbd1BDbfc03e6CEfb36365E148c93F62;
 
-    // User Balance Map
-    mapping(address => uint) public userBalanceMap;
+    // User Balance Map(Wei)
+    mapping(address => uint) public userBalanceMapWei;
     
     // Reward Pool Balance
-    uint public rewardPoolBalance;
+    uint public rewardPoolBalanceWei;
     
     // BET Token Address
     address BET = 0x47DbA3639dda3b927EA20F754fAb0973dC26cC65;
@@ -27,6 +34,16 @@ contract BscBets {
     // Min LP Token for VIP
     uint vipThreshold = 10000;
 
+    // VRF Functions
+    function getRandomInt() public {
+        uint256 requestId = chainlinkVRF.requestRandomWords();
+        bool fulfilled;
+        uint256[] memory randomWords;
+        (fulfilled, randomWords) = chainlinkVRF.getRequestStatus(requestId);
+        require(fulfilled==true, "VRF not fulfilled");
+        return randomWords[0];
+    }
+
     // Onlyowner
     function updateProbabilityArray(uint[] memory _probabilityArray) public {
         require(msg.sender==admin, "Only admin can access");
@@ -38,36 +55,12 @@ contract BscBets {
         vipProbabilityArray = _vipProbabilityArray;
     }
 
-    function updateGlobalSeed(string memory _seed) public {
-        require(msg.sender==admin, "Only admin can access");
-        globalSeed = _seed;
-    }
-
-    function getGlobalSeed() public view returns (string memory currentSeed) {
-        return globalSeed;
-    }
-
     function decimalWrapper(uint _number) public pure returns (uint number){
         return _number * 10**14;
     }
 
     function decimalUnWrapper(uint _number) public pure returns (uint number){
         return _number / 10**14;
-    }
-
-
-    function getRandomInt() public view returns (uint randomInt) {
-        randomInt = uint(
-            keccak256(
-                abi.encodePacked(
-                    block.coinbase,
-                    block.difficulty,
-                    block.timestamp,
-                    globalSeed
-                )
-            )
-        );
-        return randomInt;
     }
 
     function getWinMultiplier(bool _isVip) public view returns (uint winMultiplier){
@@ -81,15 +74,15 @@ contract BscBets {
     }
 
 
-    function createBet(uint _betAmount, uint _multiplierLimit) public returns (bool win) {
+    function createBet(uint _betAmountWei, uint _multiplierLimit) public returns (bool win) {
+        require(_betAmountWei>=100, "betamount too small");
         require(_multiplierLimit<=10000, "invalid multiplierLimit");
         require(_multiplierLimit>=100, "invalid multiplierLimit");
-
-        require(ERC20(BET).transferFrom(msg.sender, address(this), _betAmount), "Transfer Unsuccesful");
-        userBalanceMap[msg.sender] += _betAmount;
+        require(ERC20(BET).transferFrom(msg.sender, address(this), _betAmountWei), "Transfer Unsuccesful");
+        userBalanceMapWei[msg.sender] += _betAmountWei;
 
         bool isVip;
-        if(userLpBalanceMap[msg.sender] >= vipThreshold) {
+        if(userLpBalanceMapWei[msg.sender] >= vipThreshold) {
             isVip = true;
         } else{
             isVip = false;
@@ -97,37 +90,39 @@ contract BscBets {
 
         uint winMultiplier = getWinMultiplier(isVip);
         
-        /* decide whether to save value with decimalWrapper or not
+        
         if (_multiplierLimit <= winMultiplier) {
-            userBalanceMap[msg.sender] = decimalWrapper(_betAmount)*_multiplierLimit/100;
-            rewardPoolBalance -= decimalWrapper(_betAmount)*(_multiplierLimit-100)/100;
+            userBalanceMapWei[msg.sender] = _betAmountWei * _multiplierLimit / 100;
+            rewardPoolBalanceWei -= _betAmountWei * (_multiplierLimit-100) / 100;
             win = true;
         } else {
-            userBalanceMap[msg.sender] = 0;
-            rewardPoolBalance += decimalWrapper(_betAmount)/100;
+            userBalanceMapWei[msg.sender] = 0;
+            rewardPoolBalanceWei += _betAmount;
             win = false;
         }
-        */
+        
         return win;
     }
 
     function withdrawReward() public payable {
-        uint currentBalance = userBalanceMap[msg.sender];
+        uint currentBalance = userBalanceMapWei[msg.sender];
+        require(ERC20(BET).approve(msg.sender, _amount));
         require(ERC20(BET).transferFrom(address(this), msg.sender, currentBalance), "Transfer Unsuccesful");
-        userBalanceMap[msg.sender] = 0; 
+        userBalanceMapWei[msg.sender] = 0; 
     }
 
     function adminDepositRewardPool(uint _amount) public {
         require(msg.sender==admin, "Only admin can access");
         require(ERC20(BET).transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
-        rewardPoolBalance += _amount;
+        rewardPoolBalanceWei += _amount;
     }
 
     function adminWithdrawRewardPool(uint _amount) public payable{
         require(msg.sender==admin, "Only admin can access");
-        require(_amount<=rewardPoolBalance, "insufficient fee");
+        require(_amount<=rewardPoolBalanceWei, "insufficient fee");
+        require(ERC20(BET).approve(msg.sender, _amount));
         require(ERC20(BET).transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
-        rewardPoolBalance -= _amount;
+        rewardPoolBalanceWei -= _amount;
     }
 
     /*
@@ -147,11 +142,10 @@ contract BscBets {
     function updateRewards() public {
         require(block.timestamp-lastUpdateTs >= tsEpochLength, "Cannot be updated now");
         require(rewardReserveBalance >= rewardEmissionPerDay, "Insufficient reserve");
-        uint rewardPerLpToken = decimalWrapper(rewardEmissionPerDay)/netLpTokenBalance;
         for (uint i=0; i<userAddressArray.length; i++) {
             address userAddress = userAddressArray[i];
             uint userLpBalance = userLpBalanceMap[userAddress];
-            uint rewardAmount = rewardPerLpToken * userLpBalance;
+            uint rewardAmount = rewardEmissionPerDay * userLpBalance / netLpTokenBalance ;
             userFarmingRewardMap[userAddress] += rewardAmount;
         }
         rewardReserveBalance -= rewardEmissionPerDay;
@@ -170,6 +164,7 @@ contract BscBets {
     }
 
     function adminWithdrawRewards(uint _amount) public payable{
+        require(ERC20(BET).approve(msg.sender, _amount));
         require(ERC20(BET).transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         rewardReserveBalance -= _amount;
     }
@@ -180,11 +175,13 @@ contract BscBets {
     }
 
     function withdrawLpToken(uint _amount) public payable{
+        require(BET_USDC.approve(msg.sender, _amount));
         require(BET_USDC.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] -= _amount;
     }
 
     function withdrawReward(uint _amount) public {
+        require(ERC20(BET).approve(msg.sender, _amount));
         require(ERC20(BET).transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         userFarmingRewardMap[msg.sender] -= _amount;
     }
