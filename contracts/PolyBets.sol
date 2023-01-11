@@ -10,20 +10,42 @@ interface ChainlinkVRF {
 }
 
 contract PolyBets {
+
+    // Set contract deployer as admin
+    constructor() {
+        address admin = msg.sender;
+    }
+
     // Set Chainlink interface
     ChainlinkVRF public chainlinkVRF;
 
-    // Admin Address
-    address admin = 0xA57d9222Fbd1BDbfc03e6CEfb36365E148c93F62;
+    // User Bet Struct
+    struct BetInfo {
+        uint balance;
+        uint multiplier;
+        uint vrfRequestId;
+    }
 
-    // User Balance Map(Wei)
-    mapping(address => uint) public userBalanceMapWei;
+    /*
+        basic vip level: 1, 2, 3
+        temporary vip count:
+            new user without referral: 5
+            isReferred -> 10
+            isReferrer -> 10
+    */
 
-    // User Multiplier Map
-    mapping(address => uint) public userMultiplierMap;
+    struct UserInfo {
+        uint vipLevel; // 1, 2, 3
+        uint netVolume;
+        bool isTemporaryVip; // False
+        uint temporaryVipCount; // 0
+    }
 
-    // User VRF Map
-    mapping(address => uint256) public userVrfMap;
+    // User Info Map
+    mapping(address => UserInfo) public userInfoMap;
+
+    // User Bet Map
+    mapping(address => BetInfo) public betInfoMap;
     
     // Reward Pool Balance
     uint public rewardPoolBalanceWei;
@@ -32,41 +54,74 @@ contract PolyBets {
     address BET = 0x47DbA3639dda3b927EA20F754fAb0973dC26cC65;
 
     // Probability distribution array (100~10000)
-    uint [] probabilityArray;
+    uint [] vip1ProbabilityArray;
 
-    // Probability distribution array (VIP) (100~10000)
-    uint [] vipProbabilityArray;
+    uint [] vip2ProbabilityArray;
 
+    uint [] vip3ProbabilityArray;
+
+    uint [] temporaryVipProbabilityArray;
+    
     // Min LP Token for VIP
-    uint vipThreshold = 10000;
+    uint minVipVolume = 10000;
 
     // Onlyowner
-    function updateProbabilityArray(uint[] memory _probabilityArray) public {
+    function updateVip1ProbabilityArray(uint[] memory _vip1ProbabilityArray) public {
         require(msg.sender==admin, "Only admin can access");
-        probabilityArray = _probabilityArray;
+        vip1ProbabilityArray = _vip1ProbabilityArray;
     }
 
-    function updateVipProbabilityArray(uint[] memory _vipProbabilityArray) public {
+    function updateVip2ProbabilityArray(uint[] memory _vip2ProbabilityArray) public {
         require(msg.sender==admin, "Only admin can access");
-        vipProbabilityArray = _vipProbabilityArray;
+        vip2ProbabilityArray = _vip2ProbabilityArray;
     }
 
-    function decimalWrapper(uint _number) public pure returns (uint number){
-        return _number * 10**14;
+    function updateVip3ProbabilityArray(uint[] memory _vip3ProbabilityArray) public {
+        require(msg.sender==admin, "Only admin can access");
+        vip3ProbabilityArray = _vip3ProbabilityArray;
     }
 
-    function decimalUnWrapper(uint _number) public pure returns (uint number){
-        return _number / 10**14;
+    function updateTemporaryVipProbabilityArray(uint[] memory _temporaryVipProbabilityArray) public {
+        require(msg.sender==admin, "Only admin can access");
+        temporaryVipProbabilityArray = _temporaryVipProbabilityArray;
     }
 
-    function getWinMultiplier(bool _isVip, uint256 _randInt) public returns (uint winMultiplier){
-        if (_isVip) {
-            winMultiplier = vipProbabilityArray[_randInt%probabilityArray.length];
+    function createAccount(address referrer) public {
+        userAddressArray.push(msg.sender);
+        // Check referrer
+        if (userInfoMap[referrer].netVolume>=minVipVolume) {
+            UserInfo memory userInfo = UserInfo(1, 0, 5);
+        }
+        else {
+            UserInfo memory userInfo = UserInfo(1, 0, 4);
+            userInfoMap[msg.sender] = userInfo;
+        }
+    }
+
+    function getWinMultiplier(uint256 _randInt) public returns (uint winMultiplier){
+        uint _vipLevel=userInfoMap[msg.sender].vipLevel;
+        if (_vipLevel==1) {
+            winMultiplier = vip1ProbabilityArray[_randInt%vip1ProbabilityArray.length];
+        } else if(_vipLevel==2){
+            winMultiplier = vip2ProbabilityArray[_randInt%vip2ProbabilityArray.length];
+        } else if(_vipLevel==3){
+            winMultiplier = vip3ProbabilityArray[_randInt%vip3ProbabilityArray.length];
+        } else if(_vipLevel==4){
+            winMultiplier = vip4ProbabilityArray[_randInt%vip4ProbabilityArray.length];
         } else {
-            winMultiplier = probabilityArray[_randInt%probabilityArray.length];
+            winMultiplier = vip5ProbabilityArray[_randInt%vip5ProbabilityArray.length];
         }
         return winMultiplier;
     }
+
+    // function getWinMultiplier(bool _isVip, uint256 _randInt) public returns (uint winMultiplier){
+    //     if (_isVip) {
+    //         winMultiplier = vipProbabilityArray[_randInt%probabilityArray.length];
+    //     } else {
+    //         winMultiplier = probabilityArray[_randInt%probabilityArray.length];
+    //     }
+    //     return winMultiplier;
+    // }
 
     function createBet(uint _betAmountWei, uint _multiplierLimit) public {
         require(_betAmountWei>=100, "betamount too small");
@@ -78,15 +133,15 @@ contract PolyBets {
         chainlinkVRF.requestRandomWords();
         uint256 requestId = chainlinkVRF.lastRequestId();
 
-        userBalanceMapWei[msg.sender] = _betAmountWei;
-        userMultiplierMap[msg.sender] = _multiplierLimit;
-        userVrfMap[msg.sender] = requestId;
+        BetInfo storage betInfo = BetInfo(_betAmountWei, _multiplierLimit, requestId);
+        betInfoMap[msg.sender] = betInfo;
     }
 
     function determineWin() public {
-        uint betAmountWei = userBalanceMapWei[msg.sender];
-        uint multiplierLimit = userMultiplierMap[msg.sender];
-        uint256 requestId = userVrfMap[msg.sender];
+        BetInfo storage betInfo = betInfoMap[msg.sender];
+        uint betAmountWei = betInfo.balance;
+        uint multiplierLimit = betInfo.multiplier;
+        uint requestId = betInfo.vrfRequestId;
 
         bool fulfilled;
         uint256[] memory randomWords;
@@ -102,7 +157,7 @@ contract PolyBets {
             isVip = false;
         }
 
-        uint winMultiplier = getWinMultiplier(isVip, randInt);
+        uint winMultiplier = getWinMultiplier(randInt);
         
         if (multiplierLimit <= winMultiplier) {
             userBalanceMapWei[msg.sender] = betAmountWei * multiplierLimit / 100;
@@ -111,7 +166,6 @@ contract PolyBets {
             userBalanceMapWei[msg.sender] = 0;
             rewardPoolBalanceWei += betAmountWei;
         }
-        
     }
 
     function withdrawReward() public payable {
@@ -182,6 +236,7 @@ contract PolyBets {
     function depositLpToken(uint _amount) public {
         require(BET_USDC.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] += _amount;
+        if(userLpBalanceMap[msg.sender]>=)
     }
 
     function withdrawLpToken(uint _amount) public payable{
