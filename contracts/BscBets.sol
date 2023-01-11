@@ -51,6 +51,11 @@ contract BscBets {
         return _number * 10**14;
     }
 
+    function decimalUnWrapper(uint _number) public pure returns (uint number){
+        return _number / 10**14;
+    }
+
+
     function getRandomInt() public view returns (uint randomInt) {
         randomInt = uint(
             keccak256(
@@ -92,15 +97,17 @@ contract BscBets {
 
         uint winMultiplier = getWinMultiplier(isVip);
         
+        /* decide whether to save value with decimalWrapper or not
         if (_multiplierLimit <= winMultiplier) {
-            userBalanceMap[msg.sender] = _betAmount*_multiplierLimit/100;
-            rewardPoolBalance -= _betAmount*(_multiplierLimit-100)/100;
+            userBalanceMap[msg.sender] = decimalWrapper(_betAmount)*_multiplierLimit/100;
+            rewardPoolBalance -= decimalWrapper(_betAmount)*(_multiplierLimit-100)/100;
             win = true;
         } else {
             userBalanceMap[msg.sender] = 0;
-            rewardPoolBalance += _betAmount/100;
+            rewardPoolBalance += decimalWrapper(_betAmount)/100;
             win = false;
         }
+        */
         return win;
     }
 
@@ -140,7 +147,7 @@ contract BscBets {
     function updateRewards() public {
         require(block.timestamp-lastUpdateTs >= tsEpochLength, "Cannot be updated now");
         require(rewardReserveBalance >= rewardEmissionPerDay, "Insufficient reserve");
-        uint rewardPerLpToken = rewardEmissionPerDay/netLpTokenBalance;
+        uint rewardPerLpToken = decimalWrapper(rewardEmissionPerDay)/netLpTokenBalance;
         for (uint i=0; i<userAddressArray.length; i++) {
             address userAddress = userAddressArray[i];
             uint userLpBalance = userLpBalanceMap[userAddress];
