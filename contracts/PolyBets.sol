@@ -9,7 +9,7 @@ interface ChainlinkVRF {
     function lastRequestId() external view returns (uint256);
 }
 
-contract BscBets {
+contract PolyBets {
     // Set Chainlink interface
     ChainlinkVRF public chainlinkVRF;
 

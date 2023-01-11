@@ -41,7 +41,7 @@ contract VRFv2Consumer is VRFConsumerBaseV2, ConfirmedOwner {
     // For a list of available gas lanes on each network,
     // see https://docs.chain.link/docs/vrf/v2/subscription/supported-networks/#configurations
     bytes32 keyHash =
-        0xd4bb89654db74673a187bd804519e65e3f71a52bc55f11da7601a13dcf505314;
+        0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f;
 
     // Depends on the number of requested values that you want sent to the
     // fulfillRandomWords() function. Storing each word costs about 20,000 gas,
@@ -52,7 +52,7 @@ contract VRFv2Consumer is VRFConsumerBaseV2, ConfirmedOwner {
     uint32 callbackGasLimit = 100000;
 
     // The default is 3, but you can set this higher.
-    uint16 requestConfirmations = 5;
+    uint16 requestConfirmations = 3;
 
     // For this example, retrieve 2 random values in one request.
     // Cannot exceed VRFCoordinatorV2.MAX_NUM_WORDS.
@@ -65,13 +65,13 @@ contract VRFv2Consumer is VRFConsumerBaseV2, ConfirmedOwner {
     constructor(
         uint64 subscriptionId // Get from vrf.chain.link/chapel/new
     )
-        VRFConsumerBaseV2(0x6A2AAd07396B36Fe02a22b33cf443582f682c82f)
+        VRFConsumerBaseV2(0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed)
         ConfirmedOwner(msg.sender)
     {
         COORDINATOR = VRFCoordinatorV2Interface(
-            0x6A2AAd07396B36Fe02a22b33cf443582f682c82f
+            0x7a1BaC17Ccc5b313516C5E16fb24f7659aA5ebed
         );
-        s_subscriptionId = 2427;
+        s_subscriptionId = subscriptionId;
     }
 
     // Assumes the subscription is funded sufficiently.
