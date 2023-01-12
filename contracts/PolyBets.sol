@@ -65,6 +65,9 @@ contract PolyBets {
     // Min LP Token for VIP
     uint minVipVolume = 10000;
 
+    // Min total volume
+    uint minBetVolume = 10000;
+
     // Onlyowner
     function updateVip1ProbabilityArray(uint[] memory _vip1ProbabilityArray) public {
         require(msg.sender==admin, "Only admin can access");
@@ -90,28 +93,28 @@ contract PolyBets {
         userAddressArray.push(msg.sender);
         // Check referrer
         if (userInfoMap[referrer].netVolume>=minVipVolume) {
-            UserInfo memory userInfo = UserInfo(1, 0, 5);
+            UserInfo memory userInfo = UserInfo(1, 0, true, 10);
         }
         else {
-            UserInfo memory userInfo = UserInfo(1, 0, 4);
+            UserInfo memory userInfo = UserInfo(1, 0, true, 5);
             userInfoMap[msg.sender] = userInfo;
         }
     }
 
     function getWinMultiplier(uint256 _randInt) public returns (uint winMultiplier){
         uint _vipLevel=userInfoMap[msg.sender].vipLevel;
-        if (_vipLevel==1) {
+        if (userInfoMap[msg.sender].isTemporaryVip){
+            userInfoMap[msg.sender].temporaryVipCount-=1;
+            if(userInfoMap[msg.sender].temporaryVipCount==0){
+                userInfoMap[msg.sender].isTemporaryVip=false;
+            }
+        } else if (_vipLevel==1) {
             winMultiplier = vip1ProbabilityArray[_randInt%vip1ProbabilityArray.length];
         } else if(_vipLevel==2){
             winMultiplier = vip2ProbabilityArray[_randInt%vip2ProbabilityArray.length];
-        } else if(_vipLevel==3){
+        } else{
             winMultiplier = vip3ProbabilityArray[_randInt%vip3ProbabilityArray.length];
-        } else if(_vipLevel==4){
-            winMultiplier = vip4ProbabilityArray[_randInt%vip4ProbabilityArray.length];
-        } else {
-            winMultiplier = vip5ProbabilityArray[_randInt%vip5ProbabilityArray.length];
-        }
-        return winMultiplier;
+        } 
     }
 
     // function getWinMultiplier(bool _isVip, uint256 _randInt) public returns (uint winMultiplier){
@@ -129,6 +132,10 @@ contract PolyBets {
         require(_multiplierLimit>=100, "invalid multiplierLimit");
         require(ERC20(BET).transferFrom(msg.sender, address(this), _betAmountWei), "Transfer Unsuccesful");
 
+        userInfoMap[msg.sender].netVolume+=_betAmountWei;
+        if(userInfoMap[msg.sender].vipLevel==2 && userInfoMap[msg.sender].netVolume>=minBetVolume){
+            userInfoMap[msg.sender].vipLevel=3;
+        }
         // VRF
         chainlinkVRF.requestRandomWords();
         uint256 requestId = chainlinkVRF.lastRequestId();
@@ -236,7 +243,9 @@ contract PolyBets {
     function depositLpToken(uint _amount) public {
         require(BET_USDC.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] += _amount;
-        if(userLpBalanceMap[msg.sender]>=)
+        if(userInfoMap[msg.sender].vipLevel==1 && userLpBalanceMap[msg.sender]>=minVipVolume){
+            userInfoMap[msg.sender].vipLevel=2;
+        }
     }
 
     function withdrawLpToken(uint _amount) public payable{
