@@ -64,12 +64,73 @@ contract PolyBets {
     uint [] temporaryVipProbabilityArray;
     
     // Min LP Token for VIP
-    uint mintLpToken = 10000;
+    uint minLpToken = 10000;
 
     // Min total volume
     uint minBetVolume = 10000;
 
+    function getUserInfo() public view returns (UserInfo _userInfo){
+        _userInfo=userInfoMap[msg.sender];
+        return _userInfo;
+    }
+
+    function getBetInfo() public view returns (BetInfo _betInfo){
+        _betInfo=betInfoMap[msg.sender];
+        return _betInfo;
+    }
+
+    function getVip1ProbabilityArray() public view returns (uint [] _vip1ProbabilityArray){
+        _vip1ProbabilityArray=vip1ProbabilityArray;
+        return _vip1ProbabilityArray;
+    }
+
+    function getVip1ProbabilityArrayLength() public view returns (uint _vip1ProbabilityArrayLength){
+        _vip1ProbabilityArrayLength=vip1ProbabilityArray.length;
+        return _vip1ProbabilityArrayLength;
+    }
+
+    function getVip2ProbabilityArray() public view returns (uint [] _vip2ProbabilityArray){
+        _vip2ProbabilityArray=vip2ProbabilityArray;
+        return _vip2ProbabilityArray;
+    }
+
+    function getVip2ProbabilityArrayLength() public view returns (uint _vip2ProbabilityArrayLength){
+        _vip2ProbabilityArrayLength=vip2ProbabilityArray.length;
+        return _vip2ProbabilityArrayLength;
+    }
+
+    function getVip3ProbabilityArray() public view returns (uint [] _vip3ProbabilityArray){
+        _vip3ProbabilityArray=vip3ProbabilityArray;
+        return _vip1ProbabilityArray;
+    }
+
+    function getVip3ProbabilityArrayLength() public view returns (uint _vip3ProbabilityArrayLength){
+        _vip3ProbabilityArrayLength=vip3ProbabilityArray.length;
+        return _vip3ProbabilityArrayLength;
+    }
+
+    function getTemporaryVipProbabilityArray() public view returns (uint [] _temporaryVipProbabilityArray){
+        _temporaryVipProbabilityArray=temporaryVipProbabilityArray;
+        return _temporaryVipProbabilityArray;
+    }
+
+    function getTemporaryVipProbabilityArrayLength() public view returns (uint _temporaryVipProbabilityArrayLength){
+        _temporaryVipProbabilityArrayLength=temporaryVipProbabilityArray.length;
+        return _vip3ProbabilityArrayLength;
+    }
+
+
     // Onlyowner
+    function updateMinLpToken(uint _minLpToken) public {
+        require(msg.sender==admin, "Only admin can access");
+        minLpToken=_minLpToken;
+    }
+
+    function updateMinBetVolume(uint _minBetVolume) public {
+        require(msg.sender==admin, "Only admin can access");
+        minBetVolume=_minBetVolume;
+    }
+
     function updateVip1ProbabilityArray(uint[] memory _vip1ProbabilityArray) public {
         require(msg.sender==admin, "Only admin can access");
         vip1ProbabilityArray = _vip1ProbabilityArray;
@@ -93,7 +154,7 @@ contract PolyBets {
     function createAccount(address referrer) public {
         userAddressArray.push(msg.sender);
         // Check referrer
-        if (userInfoMap[referrer].netVolume>=mintLpToken) {
+        if (userInfoMap[referrer].netVolume>=minLpToken) {
             UserInfo memory userInfo = UserInfo(1, 0, true, 10);
             userInfoMap[msg.sender] = userInfo;
         }
@@ -162,7 +223,7 @@ contract PolyBets {
         uint256 randInt = randomWords[0];
         bool isVip;
 
-        if(userLpBalanceMap[msg.sender] >= mintLpToken) {
+        if(userLpBalanceMap[msg.sender] >= minLpToken) {
             isVip = true;
         } else{
             isVip = false;
@@ -182,20 +243,20 @@ contract PolyBets {
         }
     }
 
-    function withdrawReward() public payable {
+    function withdrawBetReward() public payable {
         uint currentBalance = betInfoMap[msg.sender].balance;
         require(ERC20(BET).approve(msg.sender, currentBalance));
         require(ERC20(BET).transferFrom(address(this), msg.sender, currentBalance), "Transfer Unsuccesful");
         betInfoMap[msg.sender].balance = 0; 
     }
 
-    function adminDepositRewardPool(uint _amount) public {
+    function adminDepositBetRewardPool(uint _amount) public {
         require(msg.sender==admin, "Only admin can access");
         require(ERC20(BET).transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         rewardPoolBalanceWei += _amount;
     }
 
-    function adminWithdrawRewardPool(uint _amount) public payable{
+    function adminWithdrawBetRewardPool(uint _amount) public payable{
         require(msg.sender==admin, "Only admin can access");
         require(_amount<=rewardPoolBalanceWei, "insufficient fee");
         require(ERC20(BET).approve(msg.sender, _amount));
@@ -236,12 +297,12 @@ contract PolyBets {
         rewardEmissionPerDay = _amount;
     }
 
-    function adminDepositRewards(uint _amount) public {
+    function adminDepositLpRewards(uint _amount) public {
         require(ERC20(BET).transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         rewardReserveBalance += _amount;
     }
 
-    function adminWithdrawRewards(uint _amount) public payable{
+    function adminWithdrawLpRewards(uint _amount) public payable{
         require(ERC20(BET).approve(msg.sender, _amount));
         require(ERC20(BET).transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         rewardReserveBalance -= _amount;
@@ -250,7 +311,7 @@ contract PolyBets {
     function depositLpToken(uint _amount) public {
         require(BET_USDC.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] += _amount;
-        if(userInfoMap[msg.sender].vipLevel==1 && userLpBalanceMap[msg.sender]>=mintLpToken){
+        if(userInfoMap[msg.sender].vipLevel==1 && userLpBalanceMap[msg.sender]>=minLpToken){
             userInfoMap[msg.sender].vipLevel=2;
         }
     }
@@ -259,12 +320,12 @@ contract PolyBets {
         require(BET_USDC.approve(msg.sender, _amount));
         require(BET_USDC.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] -= _amount;
-        if (userLpBalanceMap[msg.sender]<mintLpToken){
+        if (userLpBalanceMap[msg.sender]<minLpToken){
             userInfoMap[msg.sender].vipLevel=1;
         }
     }
 
-    function withdrawReward(uint _amount) public {
+    function withdrawLpReward(uint _amount) public {
         require(ERC20(BET).approve(msg.sender, _amount));
         require(ERC20(BET).transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         userFarmingRewardMap[msg.sender] -= _amount;
