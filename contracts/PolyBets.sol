@@ -12,8 +12,9 @@ interface ChainlinkVRF {
 contract PolyBets {
 
     // Set contract deployer as admin
+    address admin;
     constructor() {
-        address admin = msg.sender;
+        admin = msg.sender;
     }
 
     // Set Chainlink interface
@@ -51,7 +52,7 @@ contract PolyBets {
     uint public rewardPoolBalanceWei;
     
     // BET Token Address
-    address BET = 0x47DbA3639dda3b927EA20F754fAb0973dC26cC65;
+    address BET = 0x697d2FE6901a76DA03D92f1a2764Fe223fE7d456;
 
     // Probability distribution array (100~10000)
     uint [] vip1ProbabilityArray;
@@ -63,7 +64,7 @@ contract PolyBets {
     uint [] temporaryVipProbabilityArray;
     
     // Min LP Token for VIP
-    uint minVipVolume = 10000;
+    uint mintLpToken = 10000;
 
     // Min total volume
     uint minBetVolume = 10000;
@@ -92,8 +93,9 @@ contract PolyBets {
     function createAccount(address referrer) public {
         userAddressArray.push(msg.sender);
         // Check referrer
-        if (userInfoMap[referrer].netVolume>=minVipVolume) {
+        if (userInfoMap[referrer].netVolume>=mintLpToken) {
             UserInfo memory userInfo = UserInfo(1, 0, true, 10);
+            userInfoMap[msg.sender] = userInfo;
         }
         else {
             UserInfo memory userInfo = UserInfo(1, 0, true, 5);
@@ -104,6 +106,7 @@ contract PolyBets {
     function getWinMultiplier(uint256 _randInt) public returns (uint winMultiplier){
         uint _vipLevel=userInfoMap[msg.sender].vipLevel;
         if (userInfoMap[msg.sender].isTemporaryVip){
+            winMultiplier = temporaryVipProbabilityArray[_randInt%temporaryVipProbabilityArray.length];
             userInfoMap[msg.sender].temporaryVipCount-=1;
             if(userInfoMap[msg.sender].temporaryVipCount==0){
                 userInfoMap[msg.sender].isTemporaryVip=false;
@@ -114,7 +117,8 @@ contract PolyBets {
             winMultiplier = vip2ProbabilityArray[_randInt%vip2ProbabilityArray.length];
         } else{
             winMultiplier = vip3ProbabilityArray[_randInt%vip3ProbabilityArray.length];
-        } 
+        }
+        return winMultiplier;
     }
 
     // function getWinMultiplier(bool _isVip, uint256 _randInt) public returns (uint winMultiplier){
@@ -140,7 +144,7 @@ contract PolyBets {
         chainlinkVRF.requestRandomWords();
         uint256 requestId = chainlinkVRF.lastRequestId();
 
-        BetInfo storage betInfo = BetInfo(_betAmountWei, _multiplierLimit, requestId);
+        BetInfo memory betInfo = BetInfo(_betAmountWei, _multiplierLimit, requestId);
         betInfoMap[msg.sender] = betInfo;
     }
 
@@ -158,7 +162,7 @@ contract PolyBets {
         uint256 randInt = randomWords[0];
         bool isVip;
 
-        if(userLpBalanceMap[msg.sender] >= vipThreshold) {
+        if(userLpBalanceMap[msg.sender] >= mintLpToken) {
             isVip = true;
         } else{
             isVip = false;
@@ -167,19 +171,22 @@ contract PolyBets {
         uint winMultiplier = getWinMultiplier(randInt);
         
         if (multiplierLimit <= winMultiplier) {
-            userBalanceMapWei[msg.sender] = betAmountWei * multiplierLimit / 100;
+            uint newBetAmountWei = betAmountWei * multiplierLimit / 100;
+            betInfoMap[msg.sender].balance = newBetAmountWei;
             rewardPoolBalanceWei -= betAmountWei * (multiplierLimit-100) / 100;
         } else {
-            userBalanceMapWei[msg.sender] = 0;
+            betInfoMap[msg.sender].balance = 0;
+            betInfoMap[msg.sender].multiplier = 0;
+            betInfoMap[msg.sender].vrfRequestId = 0;
             rewardPoolBalanceWei += betAmountWei;
         }
     }
 
     function withdrawReward() public payable {
-        uint currentBalance = userBalanceMapWei[msg.sender];
+        uint currentBalance = betInfoMap[msg.sender].balance;
         require(ERC20(BET).approve(msg.sender, currentBalance));
         require(ERC20(BET).transferFrom(address(this), msg.sender, currentBalance), "Transfer Unsuccesful");
-        userBalanceMapWei[msg.sender] = 0; 
+        betInfoMap[msg.sender].balance = 0; 
     }
 
     function adminDepositRewardPool(uint _amount) public {
@@ -243,7 +250,7 @@ contract PolyBets {
     function depositLpToken(uint _amount) public {
         require(BET_USDC.transferFrom(msg.sender, address(this), _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] += _amount;
-        if(userInfoMap[msg.sender].vipLevel==1 && userLpBalanceMap[msg.sender]>=minVipVolume){
+        if(userInfoMap[msg.sender].vipLevel==1 && userLpBalanceMap[msg.sender]>=mintLpToken){
             userInfoMap[msg.sender].vipLevel=2;
         }
     }
@@ -252,6 +259,9 @@ contract PolyBets {
         require(BET_USDC.approve(msg.sender, _amount));
         require(BET_USDC.transferFrom(address(this), msg.sender, _amount), "Transfer Unsuccesful");
         userLpBalanceMap[msg.sender] -= _amount;
+        if (userLpBalanceMap[msg.sender]<mintLpToken){
+            userInfoMap[msg.sender].vipLevel=1;
+        }
     }
 
     function withdrawReward(uint _amount) public {
